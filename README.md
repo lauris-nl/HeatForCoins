@@ -13,7 +13,7 @@ This page explains how to correctly wire the "HeatForCoins" system, a coin-opera
 * **Input Voltage:** 12V DC (from a standard 12V wall adapter)
 * **Step-down Module:** A buck converter is used to step down from 12V to 5V for powering the ESP32-C3 Zero.
 
-(https://github.com/lauris-nl/HeatForCoins/wiki)
+([https://github.com/lauris-nl/HeatForCoins/wiki](https://github.com/lauris-nl/HeatForCoins/wiki/ESP32-DevKit-V1-%E2%80%93-Dual-Coin%E2%80%90Heater-Control))
 
 ## Additional Notes
 
