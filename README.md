@@ -1,5 +1,5 @@
-# HeatForCoins
-ESP32 C3 zero project with coin acceptor and heaters
+# HeatForCoins.yaml
+ project with ESP32 C3 zero, coin acceptors and heaters
 # HeatForCoins Wiring Guide
 
 ## Overview
