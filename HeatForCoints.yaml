@@ -1,0 +1,256 @@
+# ESPHome-configuratie voor terrasheater met muntinvoer
+
+esphome:
+  name: multi-coin-acceptor
+  friendly_name: Multi Coin Acceptor
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Multi Coin Acceptor Fallback"
+    password: "fallback123"
+
+captive_portal:
+
+# Globals per muntinvoer
+globals:
+  - id: impuls_count_1
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: pulse_timer_1
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: totaal_bedrag_1
+    type: float
+    restore_value: yes
+    initial_value: '0.0'
+
+  - id: impuls_count_2
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: pulse_timer_2
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: totaal_bedrag_2
+    type: float
+    restore_value: yes
+    initial_value: '0.0'
+
+  - id: betaalde_seconden_1
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: betaalde_seconden_2
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: running_1
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  - id: running_2
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  - id: in_bedrijf
+    type: bool
+    restore_value: yes
+    initial_value: 'true'
+
+# Switch voor Home Assistant om het systeem uit bedrijf te stellen
+switch:
+  - platform: template
+    name: "In bedrijf"
+    id: switch_in_bedrijf
+    optimistic: true
+    restore_state: true
+    turn_on_action:
+      - lambda: 'id(in_bedrijf) = true;'
+    turn_off_action:
+      - lambda: 'id(in_bedrijf) = false;'
+
+  - platform: gpio
+    pin: 25
+    name: "Muntbak opener"
+    id: muntbak_opener
+    restore_mode: ALWAYS_OFF
+
+# Output om heaters aan te sturen
+output:
+  - platform: gpio
+    pin: 26
+    id: heater_1
+
+  - platform: gpio
+    pin: 27
+    id: heater_2
+
+# Sensoren voor bedrag
+sensor:
+  - platform: template
+    name: "Totaal bedrag heater 1 (€)"
+    lambda: 'return id(totaal_bedrag_1);'
+    update_interval: 5s
+
+  - platform: template
+    name: "Totaal bedrag heater 2 (€)"
+    lambda: 'return id(totaal_bedrag_2);'
+    update_interval: 5s
+
+  - platform: template
+    name: "Betaalde seconden heater 1"
+    lambda: 'return id(betaalde_seconden_1);'
+    update_interval: 5s
+
+  - platform: template
+    name: "Betaalde seconden heater 2"
+    lambda: 'return id(betaalde_seconden_2);'
+    update_interval: 5s
+
+# Display voor heater 1
+display:
+  - platform: tm1637
+    clk_pin: 23
+    dio_pin: 22
+    id: tm_display_1
+    update_interval: 1s
+    lambda: |-
+      if (!id(in_bedrijf)) {
+        it.printf("    ");
+        return;
+      }
+      int totaal = id(betaalde_seconden_1);
+      int minuten = totaal / 60;
+      int uren = minuten / 60;
+      minuten = minuten % 60;
+      it.printf("%02d%02d", uren, minuten);
+
+# Display voor heater 2
+  - platform: tm1637
+    clk_pin: 21
+    dio_pin: 19
+    id: tm_display_2
+    update_interval: 1s
+    lambda: |-
+      if (!id(in_bedrijf)) {
+        it.printf("    ");
+        return;
+      }
+      int totaal = id(betaalde_seconden_2);
+      int minuten = totaal / 60;
+      int uren = minuten / 60;
+      minuten = minuten % 60;
+      it.printf("%02d%02d", uren, minuten);
+
+# Muntpulsen per coin acceptor
+binary_sensor:
+  - platform: gpio
+    pin: 32
+    id: coin_pulse_1
+    internal: true
+    on_press:
+      then:
+        - lambda: 'id(impuls_count_1) += 1; id(pulse_timer_1) = 0;'
+
+  - platform: gpio
+    pin: 33
+    id: coin_pulse_2
+    internal: true
+    on_press:
+      then:
+        - lambda: 'id(impuls_count_2) += 1; id(pulse_timer_2) = 0;'
+
+interval:
+  - interval: 100ms
+    then:
+      - lambda: |-
+          id(pulse_timer_1)++;
+          if (id(pulse_timer_1) >= 30 && id(impuls_count_1) > 0) {
+            float amount = 0.0;
+            switch (id(impuls_count_1)) {
+              case 1: amount = 2.0; break;
+              case 2: amount = 1.0; break;
+              case 3: amount = 0.5; break;
+              case 4: amount = 0.2; break;
+              case 5: amount = 0.1; break;
+            }
+            id(totaal_bedrag_1) += amount;
+            id(betaalde_seconden_1) += int((amount * 3600.0) / 0.4 / 1800.0);  // 0.4 €/kWh, 1800W
+            id(impuls_count_1) = 0;
+            id(pulse_timer_1) = 0;
+            id(running_1) = true;
+          }
+
+          id(pulse_timer_2)++;
+          if (id(pulse_timer_2) >= 30 && id(impuls_count_2) > 0) {
+            float amount = 0.0;
+            switch (id(impuls_count_2)) {
+              case 1: amount = 2.0; break;
+              case 2: amount = 1.0; break;
+              case 3: amount = 0.5; break;
+              case 4: amount = 0.2; break;
+              case 5: amount = 0.1; break;
+            }
+            id(totaal_bedrag_2) += amount;
+            id(betaalde_seconden_2) += int((amount * 3600.0) / 0.4 / 1800.0);
+            id(impuls_count_2) = 0;
+            id(pulse_timer_2) = 0;
+            id(running_2) = true;
+          }
+
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(running_1) && id(betaalde_seconden_1) > 0 && id(in_bedrijf);'
+          then:
+            - lambda: 'id(betaalde_seconden_1)--;'
+            - output.turn_on: heater_1
+      - if:
+          condition:
+            lambda: 'return id(betaalde_seconden_1) == 0;'
+          then:
+            - lambda: 'id(running_1) = false;'
+            - output.turn_off: heater_1
+
+      - if:
+          condition:
+            lambda: 'return id(running_2) && id(betaalde_seconden_2) > 0 && id(in_bedrijf);'
+          then:
+            - lambda: 'id(betaalde_seconden_2)--;'
+            - output.turn_on: heater_2
+      - if:
+          condition:
+            lambda: 'return id(betaalde_seconden_2) == 0;'
+          then:
+            - lambda: 'id(running_2) = false;'
+            - output.turn_off: heater_2
+
