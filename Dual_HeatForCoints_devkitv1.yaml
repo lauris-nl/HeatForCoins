@@ -26,7 +26,7 @@ wifi:
 
 captive_portal:
 
-# Globals
+# Global variables
 globals:
   - id: running
     type: bool
@@ -41,43 +41,37 @@ globals:
     restore_value: true
     initial_value: '0'
 
-# Dimmable display via Home Assistant
+# Dimmable display brightness output
 output:
   - platform: template
     id: display_brightness
     type: float
     write_action:
       - lambda: |-
-          int level = int(state * 7.0);  // scale 0.0–1.0 to 0–7
-          id(tm_display).set_intensity(level);
-          if (level == 0) {
-            id(tm_display).display();  // clear display if brightness is 0
-          }
+          int level = int(state * 7.0);
+          id(tm_display_1).set_intensity(level);
+          id(tm_display_2).set_intensity(level);
 
 light:
   - platform: output
-    name: "Display Munt"
+    name: "Display Brightness"
     id: display_munt_helderheid
     output: display_brightness
     restore_mode: ALWAYS_ON
 
-# Display (shared between coin slots)
+# Display 1
 display:
   - platform: tm1637
-    id: tm_display
+    id: tm_display_1
     clk_pin: GPIO33
     dio_pin: GPIO25
     update_interval: 1s
     lambda: |-
-      if (id(display_munt_helderheid).current_values.is_off()) {
-        return;  // don't update if display is off
-      }
-
+      if (id(display_munt_helderheid).current_values.is_off()) return;
       int totaal = id(betaalde_seconden);
       int minuten = totaal / 60;
       int uren = minuten / 60;
       minuten = minuten % 60;
-
       bool knipper = (millis() / 1000) % 2 == 0;
       if (id(running) && knipper) {
         it.printf("%02d:%02d", uren, minuten);
@@ -85,10 +79,29 @@ display:
         it.printf("%02d %02d", uren, minuten);
       }
 
-# Number sliders in HA for setting price and wattage
+# Display 2
+  - platform: tm1637
+    id: tm_display_2
+    clk_pin: GPIO35
+    dio_pin: GPIO32
+    update_interval: 1s
+    lambda: |-
+      if (id(display_munt_helderheid).current_values.is_off()) return;
+      int totaal = id(betaalde_seconden);
+      int minuten = totaal / 60;
+      int uren = minuten / 60;
+      minuten = minuten % 60;
+      bool knipper = (millis() / 1000) % 2 == 0;
+      if (id(running) && knipper) {
+        it.printf("%02d:%02d", uren, minuten);
+      } else {
+        it.printf("%02d %02d", uren, minuten);
+      }
+
+# Adjustable parameters from Home Assistant
 number:
   - platform: template
-    name: "Wattage terrasheater"
+    name: "Heater Wattage"
     id: wattage
     unit_of_measurement: W
     min_value: 100.0
@@ -97,7 +110,7 @@ number:
     initial_value: 1800.0
     optimistic: true
   - platform: template
-    name: "Prijs per kWh"
+    name: "Price per kWh"
     id: prijs_per_kwh
     unit_of_measurement: €/kWh
     min_value: 0.01
@@ -106,7 +119,7 @@ number:
     initial_value: 0.4
     optimistic: true
 
-# External switch for in_bedrijf
+# Toggle for 'in_bedrijf' from Home Assistant
 switch:
   - platform: template
     name: "In bedrijf"
@@ -119,27 +132,12 @@ switch:
       - lambda: |
           id(in_bedrijf) = false;
           id(running) = false;
-  - platform: gpio
-    id: solenoid_output
-    name: "Muntbak Open"
-    pin: GPIO13
-    restore_mode: ALWAYS_OFF
 
-# Start/stop buttons
+# Start/Stop buttons
 binary_sensor:
   - platform: gpio
     pin: GPIO23
-    name: "Start/Stop knop 1"
-    on_press:
-      then:
-        - if:
-            condition:
-              lambda: 'return id(in_bedrijf);'
-            then:
-              - lambda: 'id(running) = !id(running);'
-  - platform: gpio
-    pin: GPIO22
-    name: "Start/Stop knop 2"
+    name: "Start/Stop Button 1"
     on_press:
       then:
         - if:
@@ -148,11 +146,22 @@ binary_sensor:
             then:
               - lambda: 'id(running) = !id(running);'
 
-# Pulse inputs from coin acceptors
+  - platform: gpio
+    pin: GPIO22
+    name: "Start/Stop Button 2"
+    on_press:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(in_bedrijf);'
+            then:
+              - lambda: 'id(running) = !id(running);'
+
+# Coin inputs
 sensor:
   - platform: pulse_counter
     pin: GPIO18
-    name: "Muntinvoer 1"
+    name: "Coin Slot 1"
     id: muntinvoer_1
     internal_filter: 13us
     update_interval: 200ms
@@ -177,9 +186,10 @@ sensor:
             id(in_bedrijf) = true;
           }
           return x;
+
   - platform: pulse_counter
     pin: GPIO19
-    name: "Muntinvoer 2"
+    name: "Coin Slot 2"
     id: muntinvoer_2
     internal_filter: 13us
     update_interval: 200ms
@@ -205,7 +215,14 @@ sensor:
           }
           return x;
 
-# Timer loop voor aflopende seconden
+# Solenoid output
+switch:
+  - platform: gpio
+    name: "Coinbox Solenoid"
+    pin: GPIO13
+    id: solenoid
+
+# Countdown logic
 interval:
   - interval: 1s
     then:
