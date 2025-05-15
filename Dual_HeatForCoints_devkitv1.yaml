@@ -1,0 +1,182 @@
+esphome:
+  name: multi_coin_acceptor
+  friendly_name: Multi Coin Acceptor
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+api:
+  encryption:
+    key: "[your_api_encryption_key]"
+
+ota:
+  password: "[your_ota_password]"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: "Multi Coin Acceptor"
+    password: "fallback123"
+
+captive_portal:
+
+# Globals
+globals:
+  - id: running
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: in_bedrijf
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: betaalde_seconden
+    type: int
+    restore_value: true
+    initial_value: '0'
+
+# Dimmable display via Home Assistant
+output:
+  - platform: template
+    id: display_brightness
+    type: float
+    write_action:
+      - lambda: |-
+          int level = int(state * 7.0);  // scale 0.0–1.0 to 0–7
+          id(tm_display).set_intensity(level);
+          if (level == 0) {
+            id(tm_display).display();  // clear display if brightness is 0
+          }
+
+light:
+  - platform: output
+    name: "Display Munt"
+    id: display_munt_helderheid
+    output: display_brightness
+    restore_mode: ALWAYS_ON
+
+# Display (shared between coin slots)
+display:
+  - platform: tm1637
+    id: tm_display
+    clk_pin: GPIO23
+    dio_pin: GPIO22
+    update_interval: 1s
+    lambda: |-
+      if (id(display_munt_helderheid).current_values.is_off()) {
+        return;  // don't update if display is off
+      }
+
+      int totaal = id(betaalde_seconden);
+      int minuten = totaal / 60;
+      int uren = minuten / 60;
+      minuten = minuten % 60;
+
+      bool knipper = (millis() / 1000) % 2 == 0;
+      if (id(running) && knipper) {
+        it.printf("%02d:%02d", uren, minuten);
+      } else {
+        it.printf("%02d %02d", uren, minuten);
+      }
+
+# Number sliders in HA for setting price and wattage
+number:
+  - platform: template
+    name: "Wattage terrasheater"
+    id: wattage
+    unit_of_measurement: W
+    min_value: 100.0
+    max_value: 4000.0
+    step: 100.0
+    initial_value: 1800.0
+    optimistic: true
+  - platform: template
+    name: "Prijs per kWh"
+    id: prijs_per_kwh
+    unit_of_measurement: €/kWh
+    min_value: 0.01
+    max_value: 1.0
+    step: 0.01
+    initial_value: 0.4
+    optimistic: true
+
+# External switch for in_bedrijf
+switch:
+  - platform: template
+    name: "In bedrijf"
+    id: switch_in_bedrijf
+    lambda: |-
+      return id(in_bedrijf);
+    turn_on_action:
+      - lambda: 'id(in_bedrijf) = true;'
+    turn_off_action:
+      - lambda: |
+          id(in_bedrijf) = false;
+          id(running) = false;
+
+# Start/stop button
+binary_sensor:
+  - platform: gpio
+    pin: GPIO21
+    name: "Start/Stop knop"
+    on_press:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(in_bedrijf);'
+            then:
+              - lambda: 'id(running) = !id(running);'
+
+# Pulse input from coin acceptor
+sensor:
+  - platform: pulse_counter
+    pin: GPIO18
+    name: "Muntinvoer"
+    id: muntinvoer
+    internal_filter: 13us
+    update_interval: 200ms
+    internal: true
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: DISABLE
+    filters:
+      - lambda: |-
+          if (x > 0) {
+            int pulsen = int(x);
+            float seconden_per_cent = (1000.0 * 3600.0) / (id(wattage).state * id(prijs_per_kwh).state);
+            int toegevoegde_seconden = 0;
+            switch (pulsen) {
+              case 1: toegevoegde_seconden = int(seconden_per_cent * 10); break;
+              case 2: toegevoegde_seconden = int(seconden_per_cent * 20); break;
+              case 3: toegevoegde_seconden = int(seconden_per_cent * 50); break;
+              case 4: toegevoegde_seconden = int(seconden_per_cent * 100); break;
+              case 5: toegevoegde_seconden = int(seconden_per_cent * 200); break;
+            }
+            id(betaalde_seconden) += toegevoegde_seconden;
+            id(in_bedrijf) = true;
+          }
+          return x;
+
+# Timer loop voor aflopende seconden
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(running) && id(betaalde_seconden) > 0;'
+          then:
+            - lambda: 'id(betaalde_seconden)--;'
+      - if:
+          condition:
+            lambda: 'return id(betaalde_seconden) == 0;'
+          then:
+            - lambda: |
+                id(running) = false;
+                id(in_bedrijf) = false;
+
