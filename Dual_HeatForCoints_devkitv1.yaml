@@ -65,7 +65,7 @@ light:
 display:
   - platform: tm1637
     id: tm_display
-    clk_pin: GPIO23
+    clk_pin: GPIO33
     dio_pin: GPIO22
     update_interval: 1s
     lambda: |-
