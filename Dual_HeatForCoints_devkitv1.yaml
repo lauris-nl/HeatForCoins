@@ -119,12 +119,27 @@ switch:
       - lambda: |
           id(in_bedrijf) = false;
           id(running) = false;
+  - platform: gpio
+    id: solenoid_output
+    name: "Muntbak Open"
+    pin: GPIO13
+    restore_mode: ALWAYS_OFF
 
-# Start/stop button
+# Start/stop buttons
 binary_sensor:
   - platform: gpio
     pin: GPIO23
-    name: "Start/Stop knop"
+    name: "Start/Stop knop 1"
+    on_press:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(in_bedrijf);'
+            then:
+              - lambda: 'id(running) = !id(running);'
+  - platform: gpio
+    pin: GPIO22
+    name: "Start/Stop knop 2"
     on_press:
       then:
         - if:
@@ -133,12 +148,39 @@ binary_sensor:
             then:
               - lambda: 'id(running) = !id(running);'
 
-# Pulse input from coin acceptor
+# Pulse inputs from coin acceptors
 sensor:
   - platform: pulse_counter
     pin: GPIO18
-    name: "Muntinvoer"
-    id: muntinvoer
+    name: "Muntinvoer 1"
+    id: muntinvoer_1
+    internal_filter: 13us
+    update_interval: 200ms
+    internal: true
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: DISABLE
+    filters:
+      - lambda: |-
+          if (x > 0) {
+            int pulsen = int(x);
+            float seconden_per_cent = (1000.0 * 3600.0) / (id(wattage).state * id(prijs_per_kwh).state);
+            int toegevoegde_seconden = 0;
+            switch (pulsen) {
+              case 1: toegevoegde_seconden = int(seconden_per_cent * 10); break;
+              case 2: toegevoegde_seconden = int(seconden_per_cent * 20); break;
+              case 3: toegevoegde_seconden = int(seconden_per_cent * 50); break;
+              case 4: toegevoegde_seconden = int(seconden_per_cent * 100); break;
+              case 5: toegevoegde_seconden = int(seconden_per_cent * 200); break;
+            }
+            id(betaalde_seconden) += toegevoegde_seconden;
+            id(in_bedrijf) = true;
+          }
+          return x;
+  - platform: pulse_counter
+    pin: GPIO19
+    name: "Muntinvoer 2"
+    id: muntinvoer_2
     internal_filter: 13us
     update_interval: 200ms
     internal: true
@@ -179,4 +221,3 @@ interval:
             - lambda: |
                 id(running) = false;
                 id(in_bedrijf) = false;
-
