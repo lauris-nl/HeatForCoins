@@ -66,7 +66,7 @@ display:
   - platform: tm1637
     id: tm_display
     clk_pin: GPIO33
-    dio_pin: GPIO22
+    dio_pin: GPIO25
     update_interval: 1s
     lambda: |-
       if (id(display_munt_helderheid).current_values.is_off()) {
