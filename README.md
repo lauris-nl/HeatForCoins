@@ -22,6 +22,10 @@ This page explains how to correctly wire the "HeatForCoins" system, a coin-opera
 * Make sure the ESP32-C3 is powered by **regulated 5V** only.
 * Mount all high-current parts (like solenoid) on separate power tracks if you design a PCB.
 
+## Circuit Diagram
+
+![Circuit diagram](https://github.com/lauris-nl/HeatForCoins/raw/main/circuit_image.png)
+
 ---
 
 ## Coming Up
