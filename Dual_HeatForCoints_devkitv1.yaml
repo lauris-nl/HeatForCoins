@@ -123,7 +123,7 @@ switch:
 # Start/stop button
 binary_sensor:
   - platform: gpio
-    pin: GPIO21
+    pin: GPIO23
     name: "Start/Stop knop"
     on_press:
       then:
