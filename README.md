@@ -34,7 +34,7 @@ This project explains how to wire and configure the **HeatForCoins** system — 
 - Start/stop buttons: GPIO23 and GPIO22
 - Solenoid output: GPIO13
 
-> See full pin mapping in the [wiki](https://github.com/lauris-nl/HeatForCoins/wiki)
+> See full pin mapping in the [wiki](https://github.com/lauris-nl/HeatForCoins/wiki/ESP32-DevKit-V1-%E2%80%93-Dual-Coin%E2%80%90Heater-Control)
 
 ---
 
